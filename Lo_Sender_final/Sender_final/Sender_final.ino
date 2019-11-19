@@ -178,7 +178,7 @@ timerWrite(timer, 0);
   // send packet
   LoRa.beginPacket();
   LoRa.setTxPower(14, RF_PACONFIG_PASELECT_PABOOST);
-  LoRa.print("M:Modulo-A");
+  LoRa.print("M:Modulo-LG");
   LoRa.print(",");
   LoRa.print("P:");
   LoRa.print(valor_analog);
@@ -203,7 +203,7 @@ timerWrite(timer, 0);
  // LoRa.println(",");
   LoRa.print("V:");
   LoRa.print(gps.speed.kmph());
-  LoRa.println("\"");
+  LoRa.println("");
  // LoRa.print("S:");
   //LoRa.print(gps.satellites.value());
 //LoRa.println(",");
