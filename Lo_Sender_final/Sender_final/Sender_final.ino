@@ -14,6 +14,32 @@
 #define SEALEVELPRESSURE_HPA (1013.25) //pressao a nivel do mar
 #define EEPROM_SIZE 128
 
+
+//faz o controle do temporizador (interrupção por tempo)
+hw_timer_t *timer = NULL; 
+ 
+//função que o temporizador irá chamar, para reiniciar o ESP32
+void IRAM_ATTR resetModule(){
+ets_printf("(watchdog) reiniciar\n"); //imprime no log
+esp_restart(); //reinicia o chip
+}
+ 
+//função que o configura o temporizador
+void configureWatchdog()
+{
+timer = timerBegin(0, 80, true); //timerID 0, div 80
+//timer, callback, interrupção de borda
+timerAttachInterrupt(timer, &resetModule, true);
+//timer, tempo (us), repetição
+timerAlarmWrite(timer, 10500000, true);
+timerAlarmEnable(timer); //habilita a interrupção //enable interrupt
+}
+
+
+
+
+
+
 TinyGPSPlus gps;
 
 HardwareSerial SerialGPS(1);
@@ -57,7 +83,9 @@ void logo()
 
 void setup()
 {
+
   Serial.begin(115200);
+   configureWatchdog();
   while (!Serial);   // time to get serial running
   Serial.println(F("BME280 test"));
 
@@ -104,7 +132,7 @@ void setup()
   //WIFI Kit series V1 not support Vext control
   Heltec.begin(false /*DisplayEnable Enable*/, true /*Heltec.Heltec.Heltec.LoRa Disable*/, false /*Serial Enable*/, true /*PABOOST Enable*/, BAND /*long BAND*/);
 
-/*  Heltec.display->init();
+ /* Heltec.display->init();
   Heltec.display->flipScreenVertically();
   Heltec.display->setFont(ArialMT_Plain_10);
   logo();
@@ -113,7 +141,7 @@ void setup()
 
   Heltec.display->drawString(0, 0, "Heltec.LoRa Initial success!");
   Heltec.display->display();
-  delay(100);*/
+ */ delay(100);
 }
 //GPS inicio
 
@@ -138,25 +166,56 @@ template <class T> int EEPROM_readAnything(int ee, T& value)
 //GPS fim
 void loop()
 {
-    printValues();
-    delay(delayTime);
-    
- /* Heltec.display->clear();
+long tme = millis(); //tempo inicial do loop
+  /*Heltec.display->clear();
   Heltec.display->setTextAlignment(TEXT_ALIGN_LEFT);
   Heltec.display->setFont(ArialMT_Plain_10);
 
   Heltec.display->drawString(0, 0, "Sending packet: ");
   Heltec.display->drawString(90, 0, String(counter));
-  Heltec.display->display();
-*/
- 
+  Heltec.display->display();*/
+timerWrite(timer, 0);
+  // send packet
+  LoRa.beginPacket();
+  LoRa.setTxPower(14, RF_PACONFIG_PASELECT_PABOOST);
+  LoRa.print("M:Modulo-A");
+  LoRa.print(",");
+  LoRa.print("P:");
+  LoRa.print(valor_analog);
+  LoRa.print(",");
+  LoRa.print("T:");
+  LoRa.print(bme.readTemperature());
+  LoRa.print(",");
+  //LoRa.print("A:");
+  //LoRa.print(bme.readAltitude(SEALEVELPRESSURE_HPA));
+  //LoRa.println(",");
+  LoRa.print("U:");
+  LoRa.print(bme.readHumidity());
+  LoRa.print(",");
+  LoRa.print("L:");
+  LoRa.print(gps.location.lat(), 6);
+  LoRa.print(",");
+  LoRa.print("G:");
+  LoRa.print(gps.location.lng(), 6);
+  LoRa.print(",");
+//  LoRa.print("A:");
+  //LoRa.print(gps.altitude.meters());
+ // LoRa.println(",");
+  LoRa.print("V:");
+  LoRa.print(gps.speed.kmph());
+  LoRa.println("\"");
+ // LoRa.print("S:");
+  //LoRa.print(gps.satellites.value());
+//LoRa.println(",");
+
+  LoRa.endPacket();
   counter++;
   digitalWrite(LED, HIGH);   // turn the LED on (HIGH is the voltage level)
   delay(1000);                       // wait for a second
   digitalWrite(LED, LOW);    // turn the LED off by making the voltage LOW
   delay(500);                       // wait for a second
- 
-
+  printValues();
+  delay(delayTime);
 
   valor_analog = analogRead(MQ_analog);
   valor_dig = digitalRead(MQ_dig);
@@ -209,41 +268,8 @@ void loop()
       gpsState.altMin = gps.altitude.meters();
     }
   }
-  // send packet
-  LoRa.beginPacket();
-  LoRa.setTxPower(14, RF_PACONFIG_PASELECT_PABOOST);
-  LoRa.print("M: ");
-  LoRa.print("Modulo A'");
-  LoRa.println(",");
-  LoRa.print("G: ");
-  LoRa.print(valor_analog);
-  LoRa.println(",");
-  LoRa.print("T: ");
-  LoRa.print(bme.readTemperature());
-  LoRa.println(",");
-  //LoRa.print("A: ");
-  //LoRa.print(bme.readAltitude(SEALEVELPRESSURE_HPA));
-  //LoRa.println(",");
-  LoRa.print("U: ");
-  LoRa.print(bme.readHumidity());
-  LoRa.println(",");
-  LoRa.print("L: ");
-  LoRa.print(gps.location.lat(), 6);
-  LoRa.println(",");
-  LoRa.print("G: ");
-  LoRa.print(gps.location.lng(), 6);
-  LoRa.println(",");
-//  LoRa.print("A: ");
-  //LoRa.print(gps.altitude.meters());
- // LoRa.println(",");
-  LoRa.print("V: ");
-  LoRa.print(gps.speed.kmph());
-  LoRa.println(",");
- // LoRa.print("S: ");
-  //LoRa.print(gps.satellites.value());
-  //LoRa.println(",");
-  LoRa.endPacket();
-
+    tme = millis() - tme; //calcula o tempo (atual - inicial)
+    Serial.println(tme);
 
 }
 void printValues() {
